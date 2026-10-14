@@ -11,6 +11,7 @@ type Token struct {
 	Contenu string
 	Ligne   int
 	Colonne int
+	Colle   bool
 }
 
 // ================ //
@@ -54,6 +55,16 @@ var modificateurs = map[string]bool{
 	"to-bin":   true,
 	"to-roman": true,
 	"roman":    true,
+}
+var balises = map[string]bool{
+	"[up]":     true,
+	"[/up]":    true,
+	"[low]":    true,
+	"[/low]":   true,
+	"[cap]":    true,
+	"[/cap]":   true,
+	"[title]":  true,
+	"[/title]": true,
 }
 
 // =================== //
@@ -112,6 +123,20 @@ func AccumulerPonctuation(liste []rune) (string, int) {
 	return groupe, position
 }
 
+// ================= //
+// == APOSTROPHES == //
+// ================= //
+
+// Fonction pour déterminer si une ' est une contraction //
+func EstUneContraction(liste []rune, position int) bool {
+	if position-1 >= 0 && position+1 < len(liste) {
+		avant := unicode.IsLetter(liste[position-1])
+		apres := unicode.IsLetter(liste[position+1])
+		return avant && apres
+	}
+	return false
+}
+
 // ============ //
 // == TOKENS == //
 // ============ //
@@ -126,6 +151,27 @@ func CreationToken(sorte, contenu string, numligne, colonne int) Token {
 	}
 }
 
+// Fonction de refactorisation de l'ajout de mot //
+func AjoutMot(contenu string, liste []Token, numLigne int, colonne int) ([]Token, string) {
+	if contenu != "" {
+		liste = append(liste, CreationToken(Mot, contenu, numLigne, colonne))
+		contenu = ""
+	}
+	return liste, contenu
+}
+
+// Fonction de refactorisation pour rechercher un fermant //
+func RechercheFermant(liste []rune, i int, fermant rune) int {
+	trouve := -1
+	for j := i; j < len(liste); j++ {
+		if liste[j] == fermant {
+			trouve = j
+			break
+		}
+	}
+	return trouve
+}
+
 // Fonction permettant de transformer une ligne en liste de Token //
 func ListerToken(ligne string, numLigne int) []Token {
 	caracteres := []rune(ligne)
@@ -138,56 +184,81 @@ func ListerToken(ligne string, numLigne int) []Token {
 				colonne = i + 1
 			}
 			if EstPonctuation(caracteres[i]) {
-				if contenu != "" {
-					liste = append(liste, CreationToken(Mot, contenu, numLigne, colonne))
-					contenu = ""
-				}
+				liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
 				colonne = i + 1
 				groupe, position := AccumulerPonctuation(caracteres[i:])
 				liste = append(liste, CreationToken(Ponctuation, groupe, numLigne, colonne))
 				i += position - 1
-			} else if caracteres[i] == ')' {
-				if contenu != "" {
-					liste = append(liste, CreationToken(Mot, contenu, numLigne, colonne))
-					contenu = ""
+			} else if caracteres[i] == '"' {
+				liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
+				colonne = i + 1
+				liste = append(liste, CreationToken(Guillemet, string(caracteres[i]), numLigne, colonne))
+			} else if caracteres[i] == '\'' {
+				if EstUneContraction(caracteres, i) {
+					contenu += string(caracteres[i])
+				} else {
+					liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
+					colonne = i + 1
+					liste = append(liste, CreationToken(Guillemet, string(caracteres[i]), numLigne, colonne))
 				}
+			} else if caracteres[i] == '\\' {
+				if i+1 < len(caracteres) && caracteres[i+1] == '(' {
+					fermant := RechercheFermant(caracteres, i+1, ')')
+					if fermant == -1 {
+						contenu += string(caracteres[i])
+					} else {
+						modif, _, _ := IdentifierModificateurs(string(caracteres[i+1 : fermant+1]))
+						if modif != "" {
+							liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
+							colonne = i + 1
+							liste, contenu = AjoutMot(string(caracteres[i+1:fermant+1]), liste, numLigne, colonne)
+							i = fermant
+						} else {
+							contenu += string(caracteres[i])
+						}
+					}
+				} else {
+					contenu += string(caracteres[i])
+				}
+			} else if caracteres[i] == '[' {
+				fermant := RechercheFermant(caracteres, i, ']')
+				if fermant == -1 {
+					contenu += string(caracteres[i])
+				} else {
+					if balises[string(caracteres[i:fermant+1])] {
+						liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
+						colonne = i + 1
+						liste = append(liste, CreationToken(Balise, string(caracteres[i:fermant+1]), numLigne, colonne))
+						i = fermant
+					} else {
+						contenu += string(caracteres[i])
+					}
+				}
+			} else if caracteres[i] == ')' {
+				liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
 				liste = append(liste, CreationToken(Parenthese, string(caracteres[i]), numLigne, i+1))
 			} else if caracteres[i] != '(' {
 				contenu += string(caracteres[i])
 			} else {
-				if contenu != "" {
-					liste = append(liste, CreationToken(Mot, contenu, numLigne, colonne))
-					contenu = ""
-				}
+				liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
 				colonne = i + 1
-				fin := -1
-				for j := i; j < len(caracteres); j++ {
-					if caracteres[j] == ')' {
-						fin = j
-						break
-					}
-				}
-				if fin == -1 {
+				fermant := RechercheFermant(caracteres, i, ')')
+				if fermant == -1 {
 					liste = append(liste, CreationToken(Parenthese, string(caracteres[i]), numLigne, colonne))
 				} else {
-					modif, _, _ := IdentifierModificateurs(string(caracteres[i : fin+1]))
+					modif, _, _ := IdentifierModificateurs(string(caracteres[i : fermant+1]))
 					if modif != "" {
-						liste = append(liste, CreationToken(Modif, string(caracteres[i:fin+1]), numLigne, colonne))
-						i = fin
+						liste = append(liste, CreationToken(Modif, string(caracteres[i:fermant+1]), numLigne, colonne))
+						i = fermant
 					} else {
 						liste = append(liste, CreationToken(Parenthese, string(caracteres[i]), numLigne, colonne))
 					}
 				}
 			}
 		} else {
-			if contenu != "" {
-				liste = append(liste, CreationToken(Mot, contenu, numLigne, colonne))
-				contenu = ""
-			}
+			liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
 		}
 	}
-	if contenu != "" {
-		liste = append(liste, CreationToken(Mot, contenu, numLigne, colonne))
-	}
+	liste, contenu = AjoutMot(contenu, liste, numLigne, colonne)
 	return liste
 }
