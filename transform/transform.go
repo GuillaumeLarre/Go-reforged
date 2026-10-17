@@ -5,6 +5,7 @@ import (
 	"go-reforged/lexer"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // ==================== //
@@ -15,6 +16,19 @@ const (
 	Attention = "warning"
 	Erreur    = "error"
 )
+
+var petitsmots = map[string]bool{
+	"a":   true,
+	"an":  true,
+	"the": true,
+	"of":  true,
+	"and": true,
+	"or":  true,
+	"in":  true,
+	"on":  true,
+	"at":  true,
+	"to":  true,
+}
 
 // Creation du type Interface //
 type Rule interface {
@@ -44,15 +58,15 @@ func CreerDiagnostic(ligne, colonne int, gravite, message string) Diagnostic {
 	}
 }
 
-// ======================= //
-// == LES MODIFICATEURS == //
-// ======================= //
+// ========================== //
+// == REGLES MODIFICATEURS == //
+// ========================== //
 
 // Strcture vide pour relier la règle à sa méthode //
 type RuleModificateur struct{}
 
 func (r RuleModificateur) Name() string {
-	return "règle modificateur"
+	return "règle modificateurs"
 }
 
 //--------------- REFACTORISATION --------------- //
@@ -63,10 +77,10 @@ func TraitementModificateurs(nouvelleListe []lexer.Token, nombre int, fonction f
 	listeErreur := []error{}
 	for indice := 1; indice <= len(nouvelleListe); indice++ {
 		if nouvelleListe[len(nouvelleListe)-indice].Sorte == lexer.Mot && compteur < nombre {
-			majuscule, erreur := fonction(nouvelleListe[len(nouvelleListe)-indice].Contenu)
+			resultat, erreur := fonction(nouvelleListe[len(nouvelleListe)-indice].Contenu)
 			if erreur == nil {
 				compteur += 1
-				nouvelleListe[len(nouvelleListe)-indice].Contenu = majuscule
+				nouvelleListe[len(nouvelleListe)-indice].Contenu = resultat
 			} else {
 				listeErreur = append(listeErreur, erreur)
 				compteur += 1
@@ -187,6 +201,83 @@ func Rev(mot string) (string, error) {
 	return string(nouvelleListe), nil
 }
 
+// Fonction pour (title) //
+func Title(mot string) (string, error) {
+	if petitsmots[strings.ToLower(mot)] {
+		return strings.ToLower(mot), nil
+	} else {
+		return ConversionCap(mot)
+	}
+}
+
+// Fonction pour mettre en majuscule le premier mot de la liste //
+func MajusculePremierMotTitle(liste []lexer.Token, nombre int) {
+	compteur := 0
+	indicePremier := -1
+	for i := len(liste) - 1; i >= 0 && compteur < nombre; i-- {
+		if liste[i].Sorte == lexer.Mot {
+			compteur += 1
+			indicePremier = i
+		}
+	}
+	if indicePremier != -1 {
+		liste[indicePremier].Contenu, _ = ConversionCap(liste[indicePremier].Contenu)
+	}
+}
+
+// Fonction pour convertir un nombre décimal en chiffre romain //
+func ToRoman(mot string) (string, error) {
+	listeRomain := []string{"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"}
+	listeNombre := []int{1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1}
+	nombre, err := strconv.ParseInt(mot, 10, 64)
+	romain := ""
+	if err != nil {
+		return "", fmt.Errorf("invalid decimal number %q", mot)
+	}
+	if nombre < 1 || nombre > 3999 {
+		return "", fmt.Errorf("out of range decimal number %q", mot)
+	}
+	for i := 0; i < len(listeNombre); i++ {
+		for nombre-int64(listeNombre[i]) >= 0 {
+			nombre -= int64(listeNombre[i])
+			romain += listeRomain[i]
+		}
+	}
+	return romain, nil
+}
+
+// Fonction pour convertir un nombre romain en décimal //
+func Roman(mot string) (string, error) {
+	mots := []rune(mot)
+	var nombre int
+	romain := map[rune]int{
+		'M': 1000,
+		'D': 500,
+		'C': 100,
+		'L': 50,
+		'X': 10,
+		'V': 5,
+		'I': 1,
+	}
+	i := 0
+	for i < len(mots) {
+		if i+1 < len(mots) && romain[mots[i+1]] > romain[mots[i]] {
+			nombre += (romain[mots[i+1]] - romain[mots[i]])
+			i += 2
+		} else {
+			nombre += romain[mots[i]]
+			i++
+		}
+	}
+	nombrestr := strconv.Itoa(nombre)
+	resultat, _ := ToRoman(nombrestr)
+	if resultat != mot {
+		return "", fmt.Errorf("invalid roman number %q", mot)
+	} else {
+		return nombrestr, nil
+	}
+}
+
 //--------------- APPLICATION DES REGLES SUR LES TOKENS --------------- //
 
 // Fonction appliquant les règles des modificateurs //
@@ -222,6 +313,13 @@ func (r RuleModificateur) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnosti
 				nouvelleListe, diagnostic = TraiterCas(nouvelleListe, nombre, Oct, liste[i], diagnostic)
 			case "rev":
 				nouvelleListe, diagnostic = TraiterCas(nouvelleListe, nombre, Rev, liste[i], diagnostic)
+			case "title":
+				nouvelleListe, diagnostic = TraiterCas(nouvelleListe, nombre, Title, liste[i], diagnostic)
+				MajusculePremierMotTitle(nouvelleListe, nombre)
+			case "roman":
+				nouvelleListe, diagnostic = TraiterCas(nouvelleListe, nombre, Roman, liste[i], diagnostic)
+			case "to-roman":
+				nouvelleListe, diagnostic = TraiterCas(nouvelleListe, nombre, ToRoman, liste[i], diagnostic)
 			default:
 				nouvelleListe = append(nouvelleListe, liste[i])
 			}
@@ -230,4 +328,329 @@ func (r RuleModificateur) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnosti
 		}
 	}
 	return nouvelleListe, diagnostic
+}
+
+// ===================== //
+// == REGLES ARTICLES == //
+// ===================== //
+
+type RuleArticle struct {
+	Exceptions map[string]string
+}
+
+func (r RuleArticle) Name() string {
+	return "Règle articles"
+}
+
+func IdentifierArticle(mot string) bool {
+	switch mot {
+	case "a", "A", "an", "An", "AN":
+		return true
+	default:
+		return false
+	}
+}
+
+func TrouverMotSuivant(liste []lexer.Token) int {
+	i := 0
+	position := -1
+	for i < len(liste) {
+		if liste[i].Sorte == lexer.Mot {
+			position = i
+			break
+		} else {
+			i++
+		}
+	}
+	return position
+}
+
+func EstUneVoyelle(mot string) bool {
+	voyelles := map[string]bool{
+		"a": true,
+		"e": true,
+		"i": true,
+		"o": true,
+		"u": true,
+		"h": true,
+		"A": true,
+		"E": true,
+		"I": true,
+		"O": true,
+		"U": true,
+		"H": true,
+	}
+	if voyelles[string(mot[0])] {
+		return true
+	} else {
+		return false
+	}
+}
+
+func AppliquerRegleArticle(liste []lexer.Token, indice int, exceptions map[string]string) lexer.Token {
+	token := liste[indice]
+	position := TrouverMotSuivant(liste[indice+1:])
+	if position != -1 {
+		motSuivant := liste[position+(indice+1)].Contenu
+		article, trouve := exceptions[strings.ToLower(motSuivant)]
+		premiere := []rune((liste[position+(indice+1)].Contenu))[0]
+		estUnNombre := unicode.IsDigit(premiere)
+		if estUnNombre {
+			return token
+		}
+		if trouve {
+			if unicode.IsUpper(rune(token.Contenu[0])) {
+				token.Contenu, _ = ConversionCap(article)
+			} else {
+				token.Contenu = article
+			}
+			return token
+		}
+		if EstUneVoyelle(liste[position+(indice+1)].Contenu) {
+			switch token.Contenu {
+			case "a":
+				token.Contenu = "an"
+			case "A":
+				token.Contenu = "An"
+			}
+		} else {
+			switch token.Contenu {
+			case "an":
+				token.Contenu = "a"
+			case "An", "AN":
+				token.Contenu = "A"
+			}
+		}
+	}
+	return token
+}
+
+func (r RuleArticle) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
+	nouvelleListe := []lexer.Token{}
+	diagnostic := []Diagnostic{}
+	for i := 0; i < len(liste); i++ {
+		if liste[i].Sorte == lexer.Mot {
+			trouve := IdentifierArticle(liste[i].Contenu)
+			if trouve {
+				token := AppliquerRegleArticle(liste, i, r.Exceptions)
+				nouvelleListe = append(nouvelleListe, token)
+			} else {
+				nouvelleListe = append(nouvelleListe, liste[i])
+				continue
+			}
+		} else {
+			nouvelleListe = append(nouvelleListe, liste[i])
+		}
+	}
+	return nouvelleListe, diagnostic
+}
+
+// ================== //
+// == REGLES BLOCS == //
+// ================== //
+
+type RuleBloc struct {
+	Exceptions map[string]string
+}
+
+func (r RuleBloc) Name() string {
+	return "Règle blocs"
+}
+
+func IdentifierType(mot string) (string, bool) {
+	prefixe := strings.TrimPrefix(mot, "[")
+	suffixe := strings.TrimSuffix(prefixe, "]")
+	trouve := strings.HasPrefix(suffixe, "/")
+	if trouve {
+		sansFermant := strings.TrimPrefix(suffixe, "/")
+		return sansFermant, true
+	} else {
+		return suffixe, false
+	}
+}
+
+func (r RuleBloc) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
+	nouvelleListe := []lexer.Token{}
+	diagnostic := []Diagnostic{}
+	pile := []lexer.Token{}
+	premierMot := false
+	for i := 0; i < len(liste); i++ {
+		if liste[i].Sorte == lexer.Balise {
+			premierMot = true
+			balise, fermante := IdentifierType(liste[i].Contenu)
+			if !fermante {
+				pile = append(pile, liste[i])
+			} else if len(pile) == 0 {
+				message := fmt.Sprintf("closing tag %q without opening tag", liste[i].Contenu)
+				diag := CreerDiagnostic(liste[i].Ligne, liste[i].Colonne, Erreur, message)
+				diagnostic = append(diagnostic, diag)
+				continue
+			} else {
+				ancienneBalise, _ := IdentifierType(pile[len(pile)-1].Contenu)
+				if balise == ancienneBalise {
+					pile = pile[:len(pile)-1]
+				} else {
+					message := fmt.Sprintf("closing tag %q does not match %q", liste[i].Contenu, pile[len(pile)-1].Contenu)
+					diag := CreerDiagnostic(liste[i].Ligne, liste[i].Colonne, Erreur, message)
+					diagnostic = append(diagnostic, diag)
+				}
+			}
+		} else if liste[i].Sorte == lexer.Mot {
+			if len(pile) == 0 {
+				nouvelleListe = append(nouvelleListe, liste[i])
+				continue
+			}
+			ancienneBalise, _ := IdentifierType(pile[len(pile)-1].Contenu)
+			switch ancienneBalise {
+			case "up":
+				token := liste[i]
+				majuscule, _ := Majuscule(token.Contenu)
+				token.Contenu = majuscule
+				nouvelleListe = append(nouvelleListe, token)
+			case "low":
+				token := liste[i]
+				minuscule, _ := Minuscule(token.Contenu)
+				token.Contenu = minuscule
+				nouvelleListe = append(nouvelleListe, token)
+			case "title":
+				token := liste[i]
+				if premierMot {
+					maj, _ := ConversionCap(token.Contenu)
+					token.Contenu = maj
+					nouvelleListe = append(nouvelleListe, token)
+					premierMot = false
+				} else {
+					title, _ := Title(token.Contenu)
+					token.Contenu = title
+					nouvelleListe = append(nouvelleListe, token)
+				}
+			case "cap":
+				token := liste[i]
+				cap, _ := ConversionCap(token.Contenu)
+				token.Contenu = cap
+				nouvelleListe = append(nouvelleListe, token)
+			}
+		} else {
+			nouvelleListe = append(nouvelleListe, liste[i])
+		}
+	}
+	for _, ouvrante := range pile {
+		message := fmt.Sprintf("unclosed block %q", ouvrante.Contenu)
+		diag := CreerDiagnostic(ouvrante.Ligne, ouvrante.Colonne, Erreur, message)
+		diagnostic = append(diagnostic, diag)
+	}
+	return nouvelleListe, diagnostic
+}
+
+// ========================= //
+// == REGLES PONCTUATIONS == //
+// ========================= //
+
+type RulePonctuation struct{}
+
+func (r RulePonctuation) Name() string {
+	return "Règle ponctuations"
+}
+
+func (r RulePonctuation) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
+	nouvelleListe := []lexer.Token{}
+	diagnostics := []Diagnostic{}
+	for i := 0; i < len(liste); i++ {
+		if liste[i].Sorte == lexer.Ponctuation {
+			token := liste[i]
+			token.Colle = true
+			nouvelleListe = append(nouvelleListe, token)
+		} else {
+			nouvelleListe = append(nouvelleListe, liste[i])
+		}
+	}
+	return nouvelleListe, diagnostics
+}
+
+// ======================= //
+// == REGLES GUILLEMETS == //
+// ======================= //
+
+type RuleGuillemet struct{}
+
+func (r RuleGuillemet) Name() string {
+	return "Règle guillemets"
+}
+
+func (r RuleGuillemet) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
+	nouvelleListe := []lexer.Token{}
+	diagnostics := []Diagnostic{}
+	pile := []int{}
+	for i := 0; i < len(liste); i++ {
+		token := liste[i]
+		if liste[i].Sorte == lexer.Guillemet {
+			if len(pile) == 0 {
+				pile = append(pile, i)
+				nouvelleListe = append(nouvelleListe, token)
+			} else if token.Contenu == nouvelleListe[pile[len(pile)-1]].Contenu {
+				if pile[len(pile)-1]+1 < len(nouvelleListe) {
+					nouvelleListe[pile[len(pile)-1]+1].Colle = true
+				}
+				token.Colle = true
+				pile = pile[:len(pile)-1]
+				nouvelleListe = append(nouvelleListe, token)
+			} else {
+				pile = append(pile, i)
+				nouvelleListe = append(nouvelleListe, token)
+			}
+		} else {
+			nouvelleListe = append(nouvelleListe, liste[i])
+		}
+	}
+	for _, ouvrante := range pile {
+		message := fmt.Sprintf("unmatched quote %q", nouvelleListe[ouvrante].Contenu)
+		diag := CreerDiagnostic(nouvelleListe[ouvrante].Ligne, nouvelleListe[ouvrante].Colonne, Attention, message)
+		diagnostics = append(diagnostics, diag)
+	}
+	return nouvelleListe, diagnostics
+}
+
+// ======================== //
+// == REGLES PARENTHESES == //
+// ======================== //
+
+type RuleParenthese struct{}
+
+func (r RuleParenthese) Name() string {
+	return "Règle parenthèses"
+}
+
+func (r RuleParenthese) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
+	nouvelleListe := []lexer.Token{}
+	diagnostics := []Diagnostic{}
+	pile := []int{}
+	for i := 0; i < len(liste); i++ {
+		token := liste[i]
+		if liste[i].Sorte == lexer.Parenthese {
+			if token.Contenu == "(" {
+				pile = append(pile, i)
+				nouvelleListe = append(nouvelleListe, token)
+			} else if token.Contenu == ")" && len(pile) > 0 {
+				if pile[len(pile)-1]+1 < len(nouvelleListe) {
+					nouvelleListe[pile[len(pile)-1]+1].Colle = true
+				}
+				token.Colle = true
+				pile = pile[:len(pile)-1]
+				nouvelleListe = append(nouvelleListe, token)
+			} else {
+				message := fmt.Sprintf("unmatched parenthesis %q", token.Contenu)
+				diag := CreerDiagnostic(token.Ligne, token.Colonne, Attention, message)
+				diagnostics = append(diagnostics, diag)
+				nouvelleListe = append(nouvelleListe, token)
+			}
+		} else {
+			nouvelleListe = append(nouvelleListe, liste[i])
+		}
+	}
+	for _, ouvrante := range pile {
+		message := fmt.Sprintf("unmatched parenthesis %q", nouvelleListe[ouvrante].Contenu)
+		diag := CreerDiagnostic(nouvelleListe[ouvrante].Ligne, nouvelleListe[ouvrante].Colonne, Attention, message)
+		diagnostics = append(diagnostics, diag)
+	}
+	return nouvelleListe, diagnostics
 }
