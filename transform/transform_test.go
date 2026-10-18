@@ -51,6 +51,7 @@ func TestRuleModificateurApply(t *testing.T) {
 		{"title premier mot petit", "of mice and men (title, 4)", "Of Mice and Men", 0},
 		{"title mots courts hors liste", "this is for you (title, 4)", "This Is For You", 0},
 		{"title accentué", "élan (title)", "Élan", 0},
+		{"to-bin invalide", "abc (to-bin)", "abc (to-bin)", 1},
 		{"title moins de mots que demandé", "hello (title, 3)", "Hello", 1},
 		{"title sans mot avant", "(title) hello", "(title) hello", 1},
 		{"sujet roman", "MMXXVI (roman)", "2026", 0},
@@ -254,6 +255,56 @@ func TestRuleParentheseApply(t *testing.T) {
 		}
 		if len(diagnostics) != te.attenduDiagnostics {
 			t.Errorf("%s : %d diagnostics, attendu %d", te.nom, len(diagnostics), te.attenduDiagnostics)
+		}
+	}
+}
+
+func TestRuleSentenceCaseApply(t *testing.T) {
+	test := []struct {
+		nom     string
+		lignes  []string
+		attendu []string
+	}{
+		{"débuts de phrase", []string{"hello. how are you? fine!"}, []string{"Hello. How are you? Fine!"}},
+		{"phrase continuée après un point", []string{"it was late.", "we went home"}, []string{"It was late.", "We went home"}},
+		{"phrase continuée après une virgule", []string{"it was late,", "we went home"}, []string{"It was late,", "we went home"}},
+		{"mot modifié exprès protégé", []string{"hello. world (low)"}, []string{"Hello. world"}},
+		{"jamais de minuscule", []string{"hello. NASA is far"}, []string{"Hello. NASA is far"}},
+		{"seule la première lettre change", []string{"hello. iPhone is great"}, []string{"Hello. IPhone is great"}},
+		{"accents", []string{"élan. été"}, []string{"Élan. Été"}},
+		{"groupe ignoré, choix documenté", []string{"really?! yes"}, []string{"Really?! yes"}},
+		{"points de suspension ignorés", []string{"wait... then"}, []string{"Wait... then"}},
+		{"ligne vide au début", []string{"", "hello"}, []string{"", "Hello"}},
+	}
+	for _, te := range test {
+		majuscule := &RuleSentenceCase{DebutPhrase: true}
+		regles := []Rule{RuleModificateur{}, RulePonctuation{}, majuscule}
+		for i, ligne := range te.lignes {
+			tokens := lexer.ListerToken(ligne, i+1)
+			for _, regle := range regles {
+				tokens, _ = regle.Apply(tokens)
+			}
+			texte := render.RemettreEntexte(tokens)
+			if texte != te.attendu[i] {
+				t.Errorf("%s, ligne %d : resultat %q, attendu %q", te.nom, i+1, texte, te.attendu[i])
+			}
+		}
+	}
+}
+
+func TestNames(t *testing.T) {
+	regles := []Rule{
+		RuleBloc{},
+		RuleModificateur{},
+		RuleArticle{},
+		RulePonctuation{},
+		RuleGuillemet{},
+		RuleParenthese{},
+		&RuleSentenceCase{},
+	}
+	for _, regle := range regles {
+		if regle.Name() == "" {
+			t.Errorf("une règle n'a pas de nom")
 		}
 	}
 }

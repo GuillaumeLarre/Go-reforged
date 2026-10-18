@@ -3,6 +3,7 @@ package transform
 import (
 	"fmt"
 	"go-reforged/lexer"
+	"go-reforged/render"
 	"strconv"
 	"strings"
 	"unicode"
@@ -81,6 +82,7 @@ func TraitementModificateurs(nouvelleListe []lexer.Token, nombre int, fonction f
 			if erreur == nil {
 				compteur += 1
 				nouvelleListe[len(nouvelleListe)-indice].Contenu = resultat
+				nouvelleListe[len(nouvelleListe)-indice].EstModifie = true
 			} else {
 				listeErreur = append(listeErreur, erreur)
 				compteur += 1
@@ -391,6 +393,12 @@ func AppliquerRegleArticle(liste []lexer.Token, indice int, exceptions map[strin
 	token := liste[indice]
 	position := TrouverMotSuivant(liste[indice+1:])
 	if position != -1 {
+		listetokenEntre := liste[indice : position+(indice+1)]
+		for i := 0; i < len(listetokenEntre); i++ {
+			if listetokenEntre[i].Sorte == lexer.Modif {
+				return token
+			}
+		}
 		motSuivant := liste[position+(indice+1)].Contenu
 		article, trouve := exceptions[strings.ToLower(motSuivant)]
 		premiere := []rune((liste[position+(indice+1)].Contenu))[0]
@@ -476,9 +484,11 @@ func (r RuleBloc) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	premierMot := false
 	for i := 0; i < len(liste); i++ {
 		if liste[i].Sorte == lexer.Balise {
-			premierMot = true
 			balise, fermante := IdentifierType(liste[i].Contenu)
 			if !fermante {
+				if balise == "title" {
+					premierMot = true
+				}
 				pile = append(pile, liste[i])
 			} else if len(pile) == 0 {
 				message := fmt.Sprintf("closing tag %q without opening tag", liste[i].Contenu)
@@ -504,11 +514,13 @@ func (r RuleBloc) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 			switch ancienneBalise {
 			case "up":
 				token := liste[i]
+				token.EstModifie = true
 				majuscule, _ := Majuscule(token.Contenu)
 				token.Contenu = majuscule
 				nouvelleListe = append(nouvelleListe, token)
 			case "low":
 				token := liste[i]
+				token.EstModifie = true
 				minuscule, _ := Minuscule(token.Contenu)
 				token.Contenu = minuscule
 				nouvelleListe = append(nouvelleListe, token)
@@ -517,16 +529,19 @@ func (r RuleBloc) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 				if premierMot {
 					maj, _ := ConversionCap(token.Contenu)
 					token.Contenu = maj
+					token.EstModifie = true
 					nouvelleListe = append(nouvelleListe, token)
 					premierMot = false
 				} else {
 					title, _ := Title(token.Contenu)
+					token.EstModifie = true
 					token.Contenu = title
 					nouvelleListe = append(nouvelleListe, token)
 				}
 			case "cap":
 				token := liste[i]
 				cap, _ := ConversionCap(token.Contenu)
+				token.EstModifie = true
 				token.Contenu = cap
 				nouvelleListe = append(nouvelleListe, token)
 			}
@@ -631,10 +646,19 @@ func (r RuleParenthese) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic)
 				pile = append(pile, i)
 				nouvelleListe = append(nouvelleListe, token)
 			} else if token.Contenu == ")" && len(pile) > 0 {
-				if pile[len(pile)-1]+1 < len(nouvelleListe) {
-					nouvelleListe[pile[len(pile)-1]+1].Colle = true
+				coller := true
+				sommet := pile[len(pile)-1]
+				if sommet+1 < len(nouvelleListe) {
+					verification := render.RemettreEntexte(nouvelleListe[sommet+1:])
+					verification = "(" + verification + ")"
+					estmarqueur, _, _ := lexer.IdentifierModificateurs(verification)
+					if estmarqueur != "" {
+						coller = false
+					} else {
+						nouvelleListe[sommet+1].Colle = true
+					}
 				}
-				token.Colle = true
+				token.Colle = coller
 				pile = pile[:len(pile)-1]
 				nouvelleListe = append(nouvelleListe, token)
 			} else {
@@ -653,4 +677,61 @@ func (r RuleParenthese) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic)
 		diagnostics = append(diagnostics, diag)
 	}
 	return nouvelleListe, diagnostics
+}
+
+// ========================== //
+// == REGLES SENTENCE CASE == //
+// ========================== //
+
+type RuleSentenceCase struct{ DebutPhrase bool }
+
+func (r RuleSentenceCase) Name() string {
+	return "Règle sentence-case"
+}
+
+func (r *RuleSentenceCase) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
+	nouvelleListe := []lexer.Token{}
+	diagnostics := []Diagnostic{}
+	for i := 0; i < len(liste); i++ {
+		token := liste[i]
+		if token.Sorte == lexer.Mot {
+			if r.DebutPhrase {
+				if token.EstModifie {
+					nouvelleListe = append(nouvelleListe, token)
+					r.DebutPhrase = false
+				} else {
+					token.Contenu = MajPremiereLettre(token.Contenu)
+					nouvelleListe = append(nouvelleListe, token)
+					r.DebutPhrase = false
+				}
+			} else {
+				nouvelleListe = append(nouvelleListe, token)
+			}
+		} else if token.Sorte == lexer.Ponctuation {
+			if token.Contenu == "." || token.Contenu == "!" || token.Contenu == "?" {
+				r.DebutPhrase = true
+				nouvelleListe = append(nouvelleListe, token)
+			} else {
+				nouvelleListe = append(nouvelleListe, token)
+			}
+		} else {
+			nouvelleListe = append(nouvelleListe, token)
+		}
+	}
+	return nouvelleListe, diagnostics
+}
+
+func MajPremiereLettre(mot string) string {
+	if mot == "" {
+		return ""
+	}
+	nouveauMot := ""
+	for i, r := range mot {
+		if i == 0 {
+			nouveauMot += strings.ToUpper(string(r))
+		} else {
+			nouveauMot += string(r)
+		}
+	}
+	return nouveauMot
 }

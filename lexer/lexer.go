@@ -7,11 +7,12 @@ import (
 )
 
 type Token struct {
-	Sorte   string
-	Contenu string
-	Ligne   int
-	Colonne int
-	Colle   bool
+	Sorte      string
+	Contenu    string
+	Ligne      int
+	Colonne    int
+	Colle      bool
+	EstModifie bool
 }
 
 // ================ //
