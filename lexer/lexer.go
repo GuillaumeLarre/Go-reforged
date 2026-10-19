@@ -6,6 +6,10 @@ import (
 	"unicode"
 )
 
+// ===================== //
+// == STRUCTURE TOKEN == //
+// ===================== //
+
 type Token struct {
 	Sorte      string
 	Contenu    string
@@ -128,7 +132,7 @@ func AccumulerPonctuation(liste []rune) (string, int) {
 // == APOSTROPHES == //
 // ================= //
 
-// Fonction pour déterminer si une ' est une contraction //
+// Fonction pour déterminer si une ' est une contraction ex : I'am //
 func EstUneContraction(liste []rune, position int) bool {
 	if position-1 >= 0 && position+1 < len(liste) {
 		avant := unicode.IsLetter(liste[position-1])

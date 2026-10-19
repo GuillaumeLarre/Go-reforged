@@ -9,9 +9,9 @@ import (
 	"unicode"
 )
 
-// ==================== //
-// == TYPE INTERFACE == //
-// ==================== //
+// ============================ //
+// == CONSTANTES ET VARIABLE == //
+// ============================ //
 
 const (
 	Attention = "warning"
@@ -31,6 +31,10 @@ var petitsmots = map[string]bool{
 	"to":  true,
 }
 
+// ==================== //
+// == TYPE INTERFACE == //
+// ==================== //
+
 // Creation du type Interface //
 type Rule interface {
 	Name() string
@@ -49,7 +53,7 @@ type Diagnostic struct {
 	Message string
 }
 
-// Fonction de creation de structure Diagnostic //
+// Fonction de création de la structure Diagnostic //
 func CreerDiagnostic(ligne, colonne int, gravite, message string) Diagnostic {
 	return Diagnostic{
 		Ligne:   ligne,
@@ -63,7 +67,7 @@ func CreerDiagnostic(ligne, colonne int, gravite, message string) Diagnostic {
 // == REGLES MODIFICATEURS == //
 // ========================== //
 
-// Strcture vide pour relier la règle à sa méthode //
+// Structure vide pour relier la règle à sa méthode //
 type RuleModificateur struct{}
 
 func (r RuleModificateur) Name() string {
@@ -76,7 +80,7 @@ func (r RuleModificateur) Name() string {
 func TraitementModificateurs(nouvelleListe []lexer.Token, nombre int, fonction func(string) (string, error)) (int, []error) {
 	compteur := 0
 	listeErreur := []error{}
-	for indice := 1; indice <= len(nouvelleListe); indice++ {
+	for indice := 1; indice <= len(nouvelleListe) && compteur < nombre; indice++ {
 		if nouvelleListe[len(nouvelleListe)-indice].Sorte == lexer.Mot && compteur < nombre {
 			resultat, erreur := fonction(nouvelleListe[len(nouvelleListe)-indice].Contenu)
 			if erreur == nil {
@@ -282,7 +286,7 @@ func Roman(mot string) (string, error) {
 
 //--------------- APPLICATION DES REGLES SUR LES TOKENS --------------- //
 
-// Fonction appliquant les règles des modificateurs //
+// Méthode appliquant les règles des modificateurs //
 func (r RuleModificateur) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	nouvelleListe := []lexer.Token{}
 	diagnostic := []Diagnostic{}
@@ -336,6 +340,7 @@ func (r RuleModificateur) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnosti
 // == REGLES ARTICLES == //
 // ===================== //
 
+// Création de la strcture RuleArticle avec une map pouvant contenir des exceptions //
 type RuleArticle struct {
 	Exceptions map[string]string
 }
@@ -344,6 +349,7 @@ func (r RuleArticle) Name() string {
 	return "Règle articles"
 }
 
+// Fonction permettant d'identifier si c'est un article //
 func IdentifierArticle(mot string) bool {
 	switch mot {
 	case "a", "A", "an", "An", "AN":
@@ -353,6 +359,7 @@ func IdentifierArticle(mot string) bool {
 	}
 }
 
+// Fonction permettant de trouver quel sera le mot suivant l'article //
 func TrouverMotSuivant(liste []lexer.Token) int {
 	i := 0
 	position := -1
@@ -367,6 +374,7 @@ func TrouverMotSuivant(liste []lexer.Token) int {
 	return position
 }
 
+// Fonction permettant de dire si la première lettre est une voyelle //
 func EstUneVoyelle(mot string) bool {
 	voyelles := map[string]bool{
 		"a": true,
@@ -389,6 +397,7 @@ func EstUneVoyelle(mot string) bool {
 	}
 }
 
+// Fonction de refactorisation permettant d'appliquer la règle de l'article //
 func AppliquerRegleArticle(liste []lexer.Token, indice int, exceptions map[string]string) lexer.Token {
 	token := liste[indice]
 	position := TrouverMotSuivant(liste[indice+1:])
@@ -433,6 +442,7 @@ func AppliquerRegleArticle(liste []lexer.Token, indice int, exceptions map[strin
 	return token
 }
 
+// Méthode permettant d'appliquer la règle de l'article //
 func (r RuleArticle) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	nouvelleListe := []lexer.Token{}
 	diagnostic := []Diagnostic{}
@@ -457,6 +467,7 @@ func (r RuleArticle) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 // == REGLES BLOCS == //
 // ================== //
 
+// Création de la strcture RuleBloc avec une map pouvant contenir des exceptions //
 type RuleBloc struct {
 	Exceptions map[string]string
 }
@@ -465,6 +476,7 @@ func (r RuleBloc) Name() string {
 	return "Règle blocs"
 }
 
+// Fonction permettant d'identifier le type de bloc //
 func IdentifierType(mot string) (string, bool) {
 	prefixe := strings.TrimPrefix(mot, "[")
 	suffixe := strings.TrimSuffix(prefixe, "]")
@@ -477,6 +489,7 @@ func IdentifierType(mot string) (string, bool) {
 	}
 }
 
+// Méthode permettant d'appliquer les règles de bloc //
 func (r RuleBloc) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	nouvelleListe := []lexer.Token{}
 	diagnostic := []Diagnostic{}
@@ -561,12 +574,14 @@ func (r RuleBloc) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 // == REGLES PONCTUATIONS == //
 // ========================= //
 
+// Structure vide pour relier la règle à sa méthode //
 type RulePonctuation struct{}
 
 func (r RulePonctuation) Name() string {
 	return "Règle ponctuations"
 }
 
+// Méthode permettant d'appliquer le règle de ponctuation //
 func (r RulePonctuation) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	nouvelleListe := []lexer.Token{}
 	diagnostics := []Diagnostic{}
@@ -586,12 +601,14 @@ func (r RulePonctuation) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic
 // == REGLES GUILLEMETS == //
 // ======================= //
 
+// Structure vide pour relier la règle à sa méthode //
 type RuleGuillemet struct{}
 
 func (r RuleGuillemet) Name() string {
 	return "Règle guillemets"
 }
 
+// Méthode permettant d'appliquer la règle des guillemets //
 func (r RuleGuillemet) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	nouvelleListe := []lexer.Token{}
 	diagnostics := []Diagnostic{}
@@ -629,12 +646,14 @@ func (r RuleGuillemet) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) 
 // == REGLES PARENTHESES == //
 // ======================== //
 
+// Structure vide pour relier la règle à sa méthode //
 type RuleParenthese struct{}
 
 func (r RuleParenthese) Name() string {
 	return "Règle parenthèses"
 }
 
+// Méthode permettant d'appliquer la règle des parenthèses //
 func (r RuleParenthese) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	nouvelleListe := []lexer.Token{}
 	diagnostics := []Diagnostic{}
@@ -683,18 +702,21 @@ func (r RuleParenthese) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic)
 // == REGLES SENTENCE CASE == //
 // ========================== //
 
+// Structure vide pour relier la règle à sa méthode //
 type RuleSentenceCase struct{ DebutPhrase bool }
 
 func (r RuleSentenceCase) Name() string {
 	return "Règle sentence-case"
 }
 
+// Méthode permettant d'appliquer l'option sentence-case //
 func (r *RuleSentenceCase) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnostic) {
 	nouvelleListe := []lexer.Token{}
 	diagnostics := []Diagnostic{}
 	for i := 0; i < len(liste); i++ {
 		token := liste[i]
-		if token.Sorte == lexer.Mot {
+		switch token.Sorte {
+		case lexer.Mot:
 			if r.DebutPhrase {
 				if token.EstModifie {
 					nouvelleListe = append(nouvelleListe, token)
@@ -707,20 +729,21 @@ func (r *RuleSentenceCase) Apply(liste []lexer.Token) ([]lexer.Token, []Diagnost
 			} else {
 				nouvelleListe = append(nouvelleListe, token)
 			}
-		} else if token.Sorte == lexer.Ponctuation {
+		case lexer.Ponctuation:
 			if token.Contenu == "." || token.Contenu == "!" || token.Contenu == "?" {
 				r.DebutPhrase = true
 				nouvelleListe = append(nouvelleListe, token)
 			} else {
 				nouvelleListe = append(nouvelleListe, token)
 			}
-		} else {
+		default:
 			nouvelleListe = append(nouvelleListe, token)
 		}
 	}
 	return nouvelleListe, diagnostics
 }
 
+// Fonction permettant de mettre une majuscule sur la première lettre //
 func MajPremiereLettre(mot string) string {
 	if mot == "" {
 		return ""

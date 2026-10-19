@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// ================= //
+// == TESTS LEXER == //
+// ================= //
+
 // Fonction de test pour CreationToken //
 func TestCreationToken(t *testing.T) {
 	test := []struct {
@@ -130,6 +134,14 @@ func TestListerToken(t *testing.T) {
 			{Mot, "fine", 1, 35, false, false},
 			{Guillemet, "'", 1, 40, false, false},
 			{Guillemet, "\"", 1, 42, false, false},
+		}},
+		{"apostrophe en fin de ligne", "rock'", 1, []Token{
+			{Sorte: Mot, Contenu: "rock", Ligne: 1, Colonne: 1},
+			{Sorte: Guillemet, Contenu: "'", Ligne: 1, Colonne: 5},
+		}},
+		{"apostrophe en début de ligne", "'rock", 1, []Token{
+			{Sorte: Guillemet, Contenu: "'", Ligne: 1, Colonne: 1},
+			{Sorte: Mot, Contenu: "rock", Ligne: 1, Colonne: 2},
 		}},
 	}
 	for _, te := range test {

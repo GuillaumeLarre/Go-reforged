@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+// ================== //
+// == TESTS RENDER == //
+// ================== //
+
+// Fonction générale pour RemettreEnTexte //
 func TestRemettreEnTexte(t *testing.T) {
 	test := []struct {
 		nom     string

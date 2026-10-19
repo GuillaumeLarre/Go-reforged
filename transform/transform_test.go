@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+// ===================== //
+// == TESTS TRANSFORM == //
+// ===================== //
+
+// Fonction générale pour tester la méthode des modificateurs //
 func TestRuleModificateurApply(t *testing.T) {
 	test := []struct {
 		nom                string
@@ -77,6 +82,7 @@ func TestRuleModificateurApply(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester la méthode des articles //
 func TestRuleArticleApply(t *testing.T) {
 	test := []struct {
 		nom                string
@@ -110,6 +116,7 @@ func TestRuleArticleApply(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester les exceptions des articles //
 func TestRuleArticleExceptions(t *testing.T) {
 	regle := RuleArticle{Exceptions: map[string]string{"university": "a", "house": "a"}}
 	test := []struct {
@@ -132,6 +139,7 @@ func TestRuleArticleExceptions(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester la méthode des blocs //
 func TestRuleBlocApply(t *testing.T) {
 	test := []struct {
 		nom                string
@@ -173,6 +181,7 @@ func TestRuleBlocApply(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester la méthode de la ponctuation //
 func TestRulePonctuationApply(t *testing.T) {
 	test := []struct {
 		nom     string
@@ -196,6 +205,7 @@ func TestRulePonctuationApply(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester la méthode des guillemets //
 func TestRuleGuillemetApply(t *testing.T) {
 	test := []struct {
 		nom                string
@@ -231,6 +241,7 @@ func TestRuleGuillemetApply(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester la méthode des parenthèses //
 func TestRuleParentheseApply(t *testing.T) {
 	test := []struct {
 		nom                string
@@ -259,6 +270,7 @@ func TestRuleParentheseApply(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester la méthode de l'option sentence-case //
 func TestRuleSentenceCaseApply(t *testing.T) {
 	test := []struct {
 		nom     string
@@ -292,6 +304,7 @@ func TestRuleSentenceCaseApply(t *testing.T) {
 	}
 }
 
+// Fonction générale pour tester l'appel de la méthode Name //
 func TestNames(t *testing.T) {
 	regles := []Rule{
 		RuleBloc{},
@@ -306,5 +319,16 @@ func TestNames(t *testing.T) {
 		if regle.Name() == "" {
 			t.Errorf("une règle n'a pas de nom")
 		}
+	}
+}
+
+// Fonction pour tester un mot vide //
+func TestMotVide(t *testing.T) {
+	resultat, _ := ConversionCap("")
+	if resultat != "" {
+		t.Errorf("ConversionCap(\"\") : resultat %q, attendu \"\"", resultat)
+	}
+	if MajPremiereLettre("") != "" {
+		t.Errorf("MajPremiereLettre(\"\") : resultat %q, attendu \"\"", MajPremiereLettre(""))
 	}
 }

@@ -1,16 +1,24 @@
 package render
 
-import "go-reforged/lexer"
+import (
+	"go-reforged/lexer"
+	"strings"
+)
 
+// ============ //
+// == RENDER == //
+// ============ //
+
+// Fonction permettant tranformer les Tokens en texte //
 func RemettreEntexte(liste []lexer.Token) string {
-	ligne := ""
+	var ligne strings.Builder
 	for i := 0; i < len(liste); i++ {
 		if i == 0 || liste[i].Colle {
-			ligne += liste[i].Contenu
+			ligne.WriteString(liste[i].Contenu)
 		} else {
-			ligne += " "
-			ligne += liste[i].Contenu
+			ligne.WriteString(" ")
+			ligne.WriteString(liste[i].Contenu)
 		}
 	}
-	return ligne
+	return ligne.String()
 }

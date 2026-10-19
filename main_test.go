@@ -1,14 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"go-reforged/transform"
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
 
+// ================ //
+// == TESTS MAIN == //
+// ================ //
+
+// Tests pour VerifierEtCreerExceptions //
 func TestVerifierEtCreerExceptions(t *testing.T) {
 	test := []struct {
 		nom                string
@@ -38,6 +45,7 @@ func TestVerifierEtCreerExceptions(t *testing.T) {
 	}
 }
 
+// Tests pour TraitementLigne //
 func TestTraitementLigne(t *testing.T) {
 	regles := []transform.Rule{transform.RuleModificateur{}, transform.RulePonctuation{}}
 	test := []struct {
@@ -71,6 +79,7 @@ func TestTraitementLigne(t *testing.T) {
 	}
 }
 
+// Tests pour vérifier que l'on garde bien le fichier temporaire //
 func TestGarderFichier(t *testing.T) {
 	dossier := t.TempDir()
 	final := filepath.Join(dossier, "result.txt")
@@ -95,6 +104,7 @@ func TestGarderFichier(t *testing.T) {
 	}
 }
 
+// Tests pour vérifier que le fichier temporaire n'est pas gardé //
 func TestNePasGarderFichier(t *testing.T) {
 	dossier := t.TempDir()
 	final := filepath.Join(dossier, "result.txt")
@@ -115,6 +125,18 @@ func TestNePasGarderFichier(t *testing.T) {
 	}
 }
 
+// Test d'ouverture d'un dossier inexistant //
+func TestOuvertureDossierInexistant(t *testing.T) {
+	dossier := t.TempDir()
+	final := filepath.Join(dossier, "inexistant", "result.txt")
+	temp, err := OuvertureFichierTemporaire(final)
+	if err == nil {
+		t.Errorf("une erreur était attendue pour un dossier inexistant")
+		temp.Close()
+	}
+}
+
+// Fuzzing de mon programme //
 func FuzzTraitement(f *testing.F) {
 	f.Add("hello (up)")
 	f.Add("ZZ (hex) and 3 (bin) .")
@@ -144,4 +166,87 @@ func FuzzTraitement(f *testing.F) {
 			t.Errorf("pas idempotent :\nentrée   %q\nune fois %q\ndeux fois %q", texte, une, deux)
 		}
 	})
+}
+
+// Benchmark de mon TraitementLigne //
+func BenchmarkTraitementLigne(b *testing.B) {
+	regles := []transform.Rule{
+		transform.RuleBloc{},
+		transform.RuleModificateur{},
+		transform.RuleArticle{},
+		transform.RulePonctuation{},
+		transform.RuleGuillemet{},
+		transform.RuleParenthese{},
+	}
+	ligne := `[up]this is[/up] a orange , FF (hex) (to-bin) and " don't ' worry ' " ( really ) .` + "\n"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		TraitementLigne(ligne, 1, regles)
+	}
+}
+
+// Tests pour LirePaquet //
+func TestLirePaquet(t *testing.T) {
+	lecteur := bufio.NewReader(strings.NewReader("a\nb\nc"))
+	paquet, fin := LirePaquet(lecteur, 2)
+	if !slices.Equal(paquet, []string{"a\n", "b\n"}) || fin {
+		t.Errorf("premier paquet %q, fin %v", paquet, fin)
+	}
+	paquet, fin = LirePaquet(lecteur, 2)
+	if !slices.Equal(paquet, []string{"c"}) || !fin {
+		t.Errorf("second paquet %q, fin %v", paquet, fin)
+	}
+}
+
+// Vérifie que le résultat d'un paquet est identique avec 1 et 4 workers //
+func TestTraiterPaquetIdentique(t *testing.T) {
+	regles := []transform.Rule{transform.RuleModificateur{}, transform.RulePonctuation{}}
+	paquet := []string{"hello (up)\n", "a , b\n", "FF (hex)\n", "c d (cap, 2)\n", "ZZ (hex)\n"}
+	un, _ := TraiterPaquet(paquet, 1, regles, 1)
+	quatre, _ := TraiterPaquet(paquet, 1, regles, 4)
+	if !slices.Equal(un, quatre) {
+		t.Errorf("résultats différents :\n1 worker  %q\n4 workers %q", un, quatre)
+	}
+}
+
+// Vérifie le nombre de workers réellement utilisé //
+func TestNombreWorkers(t *testing.T) {
+	test := []struct {
+		nom          string
+		demande      int
+		sentenceCase bool
+		attendu      int
+	}{
+		{"valeur normale", 4, false, 4},
+		{"zéro ramené à un", 0, false, 1},
+		{"négatif ramené à un", -3, false, 1},
+		{"sentence-case force un", 4, true, 1},
+	}
+	for _, te := range test {
+		resultat := NombreWorkers(te.demande, te.sentenceCase)
+		if resultat != te.attendu {
+			t.Errorf("%s : resultat %d, attendu %d", te.nom, resultat, te.attendu)
+		}
+	}
+}
+
+// Vérifie le format exact des diagnostics, sur l'exemple de la partie 5.3 du sujet //
+func TestFormaterDiagnostic(t *testing.T) {
+	diag := transform.CreerDiagnostic(1, 8, transform.Attention, `invalid hexadecimal number "ZZ"`)
+	resultat := FormaterDiagnostic("sample.txt", diag)
+	attendu := `sample.txt:1:8: warning: invalid hexadecimal number "ZZ"`
+	if resultat != attendu {
+		t.Errorf("resultat %q, attendu %q", resultat, attendu)
+	}
+}
+
+// Vérifie l'option --strict //
+func TestAppliquerStrict(t *testing.T) {
+	avertissement := transform.CreerDiagnostic(1, 1, transform.Attention, "message")
+	if AppliquerStrict(avertissement, true).Gravite != transform.Erreur {
+		t.Errorf("avec --strict, un avertissement doit devenir une erreur")
+	}
+	if AppliquerStrict(avertissement, false).Gravite != transform.Attention {
+		t.Errorf("sans --strict, un avertissement doit rester un avertissement")
+	}
 }
